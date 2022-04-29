@@ -1,0 +1,177 @@
+using UnityEngine;
+using System.Linq;
+using System.IO;
+using System.Collections.Generic;
+using System.Collections;
+//using System.Media; // 참조 추가에 "System.Windows.Extensions.dll" 추가 시켜줘야함. "beep음" by.lsh
+
+
+
+public class AnimatorAvatar : MonoBehaviour
+{
+    
+    // 데이터 저장 경로
+    string m_strPath = "C:/Users/NREH2/Desktop/data/";
+
+    private string SaveTimetext;
+    private string SaveDaystext;
+    private string SaveAddress;
+    
+    public Vector3 Rotaion1;
+    public float pos_x, pos_y, pos_z;
+
+    private AudioSource _audio;
+    public AudioClip beep;
+
+    private float trunk_x, trunk_y, trunk_z;
+
+
+
+    [SerializeField] Animator animator;
+    [SerializeField] List<SimpleJoint> joints = new List<SimpleJoint>();
+
+    void Start ()
+    {
+
+        string SaveTimes = System.DateTime.Now.ToString("yyyyMMdd_HHmm");
+        SaveTimetext = SaveTimes;
+
+        _audio = GetComponent<AudioSource>();
+
+
+        foreach (SimpleJoint item in joints)
+        {
+            HumanBodyBones unityBoneType = item.nuitrackJoint.ToUnityBones();
+            Transform bone = animator.GetBoneTransform(unityBoneType);
+
+            item.Bone = bone;
+            item.Offset = bone.rotation;
+
+
+        }
+    }
+
+
+    void FixedUpdate()
+    {
+
+        // 데이터 저장 [C++ X, C++ Y, 유니티 X, 유니티 Y, 방향번호, 접촉플래그(카운터), 전진 및 후진방향 ,타임스탬프]
+        //WriteData(Rotaion1, pos_x, pos_y, pos_z);  
+        // by. lsh _ beep음 추가
+
+
+
+
+
+        trunk_x = Rotaion1[0];
+        trunk_y = Rotaion1[1];
+        trunk_z = Rotaion1[2];
+               
+        if (Rotaion1[0] > 180.0) {
+
+            trunk_x = Rotaion1[0] - 360;
+        }
+
+        if (Rotaion1[1] > 180.0)
+        {
+
+            trunk_y = Rotaion1[1] - 360;
+        }
+
+        if (Rotaion1[2] > 180.0)
+        {
+
+            trunk_z = Rotaion1[2] - 360;
+        }
+
+        trunk_y = trunk_y-90;
+        trunk_z = trunk_z+90;
+
+
+        WriteData(Rotaion1, trunk_x, trunk_y, trunk_z);
+
+        if (trunk_x > 30 || trunk_x < -30 || trunk_y > 30 || trunk_y < -30 || trunk_z > 30 || trunk_z < -30)
+        {
+            Debug.Log("gg");
+            _audio.PlayOneShot(beep, 10.0f);
+        }
+
+
+    }
+
+
+
+    void LateUpdate()
+    {
+        
+
+        if (CurrentUserTracker.CurrentSkeleton != null)
+        {
+            nuitrack.Skeleton skeleton = CurrentUserTracker.CurrentSkeleton;
+            transform.position = Quaternion.Euler(0f, 180f, 0f) * (0.001f * skeleton.GetJoint(nuitrack.JointType.Torso).ToVector3());
+
+            //Debug.Log(transform.position.x);
+
+            pos_x = transform.position.x;
+            pos_y = transform.position.y;
+            pos_z = transform.position.z;
+            //Debug.Log(Input.mousePosition);
+            
+            foreach (SimpleJoint item in joints)
+            {
+                nuitrack.Joint joint = skeleton.GetJoint(item.nuitrackJoint);
+
+                Quaternion rotation = Quaternion.Inverse(CalibrationInfo.SensorOrientation) * joint.ToQuaternionMirrored() * item.Offset;
+                item.Bone.rotation = rotation;
+                
+                Debug.Log(item.Bone.rotation.eulerAngles);
+                
+
+                Rotaion1 = item.Bone.rotation.eulerAngles;
+                //SystemSounds.Beep.Play();
+
+            }
+        }
+    }
+
+    public void WriteData(Vector3 strData1, float strData2, float strData3, float strData4)
+    {
+        //파일 저장(경로, 받아온 저장시각 등등)
+        FileStream f = new FileStream(m_strPath + SaveTimetext + ".txt", FileMode.Append, FileAccess.Write);
+        StreamWriter writer = new StreamWriter(f, System.Text.Encoding.ASCII);
+        writer.WriteLine(strData1 + "," + strData2 + "," + strData3 + "," + strData4);
+        writer.Close();
+    }
+
+
+    public HumanBodyBones[] GetHumanBodyBones
+    {
+        get
+        {
+
+            
+            return joints.Select(x => x.nuitrackJoint.ToUnityBones()).ToArray();
+        }
+    }
+
+    public Animator GetAnimator
+    {
+        get
+        {
+
+
+            return animator;
+        }
+    }
+}
+
+
+[System.Serializable]
+class SimpleJoint
+{
+    public nuitrack.JointType nuitrackJoint = nuitrack.JointType.None;
+
+    public Quaternion Offset { get; set; }
+
+    public Transform Bone { get; set; }
+}
